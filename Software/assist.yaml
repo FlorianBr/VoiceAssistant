@@ -1,0 +1,380 @@
+# Assist for Home Assistant
+# Board: ESP32-S3 DevKit
+# Microphone: INMP441
+# Speaker: MAX98357
+# Input: Push-Button
+# Outputs: LED Strip
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/gnumpi/esphome_audio
+      ref: main
+    components: [ adf_pipeline, i2s_audio ]
+
+esphome:
+  name: assist_cube
+  comment: Voice Assist Cube on ESP32-S3
+  friendly_name: VA Cube
+  name_add_mac_suffix: false
+  min_version: 2024.2.0
+  platformio_options:
+    board_build.flash_mode: dio
+    board_upload.maximum_size: 16777216
+    build_flags: "-DBOARD_HAS_PSRAM"
+    board_build.arduino.memory_type: qio_opi
+  on_boot:
+    priority: -100
+    then:
+      - lambda: id(sys_phase) = ${state_starting};
+      - script.execute: control_ui
+      - media_player.volume_set: 35%
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32_S3_BOX_BOARD: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+api:
+  services:
+    - service: start_va
+      then:
+        - voice_assistant.start
+    - service: stop_va
+      then:
+        - voice_assistant.stop
+
+ota:
+
+wifi:
+  ssid: !secret ssid
+  password: !secret pass
+  power_save_mode: none
+  enable_on_boot: True
+  fast_connect: True
+  output_power: 8.5
+
+web_server:
+  port: 80
+  include_internal: true
+
+logger:
+  hardware_uart : UART0
+  level: INFO
+
+substitutions:
+  state_starting: '0'
+  state_idle: '1'
+  state_wakeword: '2'
+  state_listening: '3'
+  state_thinking: '4'
+  state_replying: '5'
+  state_error: '11'
+  state_muted: '12'
+
+globals:
+  - id: sys_phase
+    type: int
+    restore_value: no
+    initial_value: ${state_starting}
+
+text_sensor:
+  - platform: template
+    name: "Current state"
+    update_interval: 1s
+    lambda: |-
+        switch(id(sys_phase)) {
+          default:
+            return {"Unknown"};
+            break;
+          case ${state_starting}:
+            return {"Starting"};
+            break;
+          case ${state_idle}:
+            return {"Idle"};
+            break;
+          case ${state_wakeword}:
+            return {"WakeWord"};
+            break;
+          case ${state_listening}:
+            return {"Listening"};
+            break;
+          case ${state_thinking}:
+            return {"Thinking"};
+            break;
+          case ${state_replying}:
+            return {"Replying"};
+            break;
+          case ${state_error}:
+            return {"Error"};
+            break;
+          case ${state_muted}:
+            return {"Muted"};
+            break;
+        }
+
+############################ Buttons / Switches
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 13
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: Toggle Wake Word
+    id: button
+    on_press:
+      - switch.toggle: use_wake_word
+
+switch:
+  - platform: template
+    name: Use Wake Word
+    id: use_wake_word
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      - script.execute: turn_on_wake_word
+    on_turn_off:
+      - script.execute: turn_off_wake_word
+
+############################ Lights
+
+spi:
+  mosi_pin: 4
+  clk_pin: 5
+
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: GPIO48
+    num_leds: 1
+    rmt_channel: 0
+    chipset: SK6812
+    name: "On Board LED"
+    effects:
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 500ms
+          update_interval: 500ms
+          min_brightness: 0%
+          max_brightness: 50%
+  - platform: spi_led_strip
+    num_leds: 32
+    id: led_strip
+    name: "RGB LED Strip"
+    data_rate: 200kHz
+    effects:
+      - addressable_color_wipe:
+          name: "Rotating Red"
+          colors:
+            - red: 20%
+              green: 0%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 7
+          add_led_interval: 75ms
+          reverse: false
+      - addressable_color_wipe:
+          name: "Rotating Green"
+          colors:
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 2
+              gradient: true
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 2
+              gradient: true
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 10
+          add_led_interval: 50ms
+          reverse: false
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 500ms
+          update_interval: 500ms
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Super Slow Pulse"
+          transition_length: 2s
+          update_interval: 2s
+          min_brightness: 0%
+          max_brightness: 50%
+
+############################ Audio
+
+i2s_audio:
+  - id: i2s_in
+    i2s_lrclk_pin: GPIO20   # INMP441 WS
+    i2s_bclk_pin: GPIO21    # INMP441 SCK
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO46   # MAX98357 LRC
+    i2s_bclk_pin: GPIO9     # MAX98357 BCK
+
+adf_pipeline:
+  - platform: i2s_audio
+    type: sink
+    id: adf_i2s_out
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO10    # MAX98357 DIN
+
+  - platform: i2s_audio
+    type: source
+    id: adf_i2s_in
+    i2s_audio_id: i2s_in
+    i2s_din_pin: GPIO19     # INMP441 DO
+    channel: left
+    sample_rate: 16000
+    bits_per_sample: 16bit
+
+microphone:
+  - platform: adf_pipeline
+    id: adf_microphone
+    pipeline:
+      - adf_i2s_in
+      - self
+
+media_player:
+  - platform: adf_pipeline
+    id: adf_media_player
+    name: s3_media_player
+    internal: false
+    pipeline:
+      - self
+      - adf_i2s_out
+
+############################ Voice Assistant
+
+micro_wake_word:
+  # model: github://FlorianBr/VoiceAssistant/wakeword/glados.json@main
+  model: hey_jarvis
+  on_wake_word_detected:
+    then:
+      - lambda: id(sys_phase) = ${state_wakeword};
+      - script.execute: control_ui
+      - media_player.play_media:
+          media_url: 'http://192.168.178.80/turret.mp3'
+      - wait_until:
+          media_player.is_idle:
+      - voice_assistant.start
+
+voice_assistant:
+  id: voice_assist
+  microphone: adf_microphone
+  media_player: adf_media_player
+  noise_suppression_level: 4
+  auto_gain: 31dBFS
+  volume_multiplier: 32.0
+  use_wake_word: false
+  on_error:
+    - lambda: id(sys_phase) = ${state_error};
+    - script.execute: control_ui
+  on_client_connected:
+    - lambda: id(sys_phase) = ${state_idle};
+    - script.execute: control_ui
+  on_listening:
+    - lambda: id(sys_phase) = ${state_listening};
+    - script.execute: control_ui
+  on_tts_start:
+    - lambda: id(sys_phase) = ${state_replying};
+    - script.execute: control_ui
+  on_end:
+    - wait_until:
+        not:
+          media_player.is_playing:
+    - delay: 250ms
+    - if:
+        condition:
+          - switch.is_on: use_wake_word
+        then:
+          - script.execute: turn_on_wake_word
+        else:
+          - script.execute: turn_off_wake_word
+
+############################ Scripts
+
+script:
+  - id: control_ui
+    then:
+      - lambda: |
+          switch(id(sys_phase)) {
+            default:
+            case ${state_starting}:
+              id(led_strip).turn_on().set_effect("Rotating Red").perform();
+              break;
+            case ${state_idle}:
+              id(led_strip).turn_off().perform();
+              break;
+            case ${state_wakeword}:
+              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(0.2).perform();
+              break;
+            case ${state_listening}:
+              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(1.0).perform();
+              break;
+            case ${state_thinking}:
+              break;
+            case ${state_replying}:
+              id(led_strip).turn_on().set_rgb(0, 0, 1).set_brightness(0.2).perform();
+              break;
+            case ${state_error}:
+              id(led_strip).turn_on().set_rgb(1, 0, 0).set_brightness(0.2).set_effect("Fast Pulse").perform();
+              break;
+            case ${state_muted}:
+              id(led_strip).turn_on().set_rgb(1, 0, 0).set_brightness(0.2).set_effect("Slow Pulse").perform();
+              break;
+          }
+  - id: turn_on_wake_word
+    then:
+      - micro_wake_word.start
+      - if:
+          condition:
+            media_player.is_playing:
+          then:
+            - media_player.stop:
+      - lambda: id(sys_phase) = ${state_idle};
+      - script.execute: control_ui
+
+  - id: turn_off_wake_word
+    then:
+      - micro_wake_word.stop
+      - lambda: id(sys_phase) = ${state_muted};
+      - script.execute: control_ui
