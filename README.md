@@ -8,32 +8,59 @@ The case is based on a 3D printed Companion Cube made by woodyhead101 available 
 
 The parts are not modified, I simply added a holder for the microphone and ESP32.
 
+![3D Parts](3dprinting.jpg)
+
 ## The hardware
 
 The ESP32 is a chinese clone of Espressifs ESP32-S3-DevKitC with slightly different pinning. The on-board RGB-LED is at IO48 instead of IO38 for example.
 
-Pinning:
+On the breadboard I still have an additional LED and a Mute-button, both removed in the final design.
 
-- GPIO4  - LED Strip CLK
-- GPIO5  - LED Strip CLK
+![Breadboard](breadboard.jpg)
+
+### Pinnings
+
+#### MAX98357
+
+- LRC  - not connected
+- BCK  - ESP32 GPIO9
+- DIN  - ESP32 GPIO10
+- GAIN - not connected
+- SD   - VDD (Channel left selected)
+- GND  - GND
+- VDD  - ESP32 3v3
+
+#### INMP441
+
+- SCK - ESP32 GPIO21
+- WS  - ESP32 GPIO20
+- L/R - GND
+- SO  - ESP32 GPIO19
+- VDD - ESP32 3v3
+- GND - GND
+
+#### LED Strip
+
+- 5V  - 5V
+- CI  - ESP32 GPIO5
+- DI  - ESP32 GPIO4
+- GND - GND
+
+#### ESP32
+
+- GPIO4  - LED Strip DI
+- GPIO5  - LED Strip CI
 - GPIO9  - MAX98357 BCK
 - GPIO10 - MAX98357 DIN
-- GPIO13 - Push Button to toggle Mute
 - GPIO19 - INMP441 SO
 - GPIO20 - INMP441 WS
 - GPIO21 - INMP441 SCK
 - GPIO46 - MAX98357 DIN
 - GPIO48 - On-Board RGB-LED
 
-Additional connections:
-
-- INMP441 L/R: GND
-- MAX98357 GAIN: Not connected
-- MAX98357 SD: VDD (Channel Left selected)
-
 ## The software
 
-A ESPHome Voice Assistant with mute-button, LED-Strip, Speaker, custom wake word...
+A ESPHome Voice Assistant with LED-Strip, Speaker, custom wake word...
 
 ### Wake word
 
