@@ -6,9 +6,15 @@ After playing around with different hardwares and the settings (see [here](https
 
 The case is based on a 3D printed Companion Cube made by woodyhead101 available on [thingiverse](https://www.thingiverse.com/thing:6468441)
 
-The parts are not modified, I simply added a holder for the microphone and ESP32.
-
 ![3D Parts](3dprinting.jpg)
+
+Most of the parts are not modified, there is only one exception: For the microphone I modified one of the Aperture-Inlays. I did that in the slicer it self, so there is no 3D File for that.
+
+Besides that I added holders for the ESP32 and the amplifiers. The speaker is screwed to the backwards facing plate and the other components hold by 3D printed parts stacked onto the speaker.
+
+![Electronic holders](holders.jpg)
+![Microphone](mic.jpg)
+![Speaker](speaker.jpg)
 
 ## The hardware
 
@@ -22,7 +28,7 @@ On the breadboard I still have an additional LED and a Mute-button, both removed
 
 #### MAX98357
 
-- LRC  - not connected
+- LRC  - ESP32 GPIO46
 - BCK  - ESP32 GPIO9
 - DIN  - ESP32 GPIO10
 - GAIN - not connected
@@ -72,18 +78,19 @@ For your own training have a look at the Docs [here](https://github.com/kahrendt
 
 States:
 
-| Name      | Condition                   | LED-Ring   |
-|-----------|-----------------------------|------------|
-| starting  | Power-On                    | Red, rotating |
-| idle      | VA is ready, waiting for WW | Off        |
-| wakeword  | WW detected                 | 20% Green  |
-| listening | VA is listening             | Full Green |
-| thinking  | (Unused)                    |            |
-| replying  | VA is answering             | 20% Blue   |
+| Name      | Condition                   | LED-Ring           |
+|-----------|-----------------------------|--------------------|
+| starting  | Power-On                    | Red, rotating      |
+| idle      | VA is ready, waiting for WW | Off                |
+| wakeword  | WW detected                 | Green              |
+| listening | VA is listening             | Green, fast pulse  |
+| thinking  | Parsing audio data          | Orange, fast pulse |
+| replying  | VA is answering             | Blue               |
 | error     | Generic/unknown error       | Red, Fast Pulse |
 | muted     | WakeWord detection OFF      | Red, Slow Pulse |
 
 TODO:
 
 - Put the confirmation MP3 in the ESPs flash
+- Use the Onboard-LED for something useful
 - Custom wake-word currently not working :(

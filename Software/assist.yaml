@@ -2,15 +2,16 @@
 # Board: ESP32-S3 DevKit
 # Microphone: INMP441
 # Speaker: MAX98357
-# Input: Push-Button
 # Outputs: LED Strip
 
 external_components:
   - source:
       type: git
       url: https://github.com/gnumpi/esphome_audio
-      ref: main
+      # ref: main
+      ref: dev-next
     components: [ adf_pipeline, i2s_audio ]
+    refresh: 0s
 
 esphome:
   name: assist_cube
@@ -28,7 +29,7 @@ esphome:
     then:
       - lambda: id(sys_phase) = ${state_starting};
       - script.execute: control_ui
-      - media_player.volume_set: 35%
+      - media_player.volume_set: 40%
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -39,6 +40,15 @@ esp32:
     version: recommended
     sdkconfig_options:
       CONFIG_ESP32_S3_BOX_BOARD: "y"
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB:      "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B:  "y"
+      CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM: "16"
+      CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM: "512"
+      CONFIG_TCPIP_RECVMBOX_SIZE: "512"
+      CONFIG_TCP_SND_BUF_DEFAULT: "65535"
+      CONFIG_TCP_WND_DEFAULT: "512000"
+      CONFIG_TCP_RECVMBOX_SIZE: "512"
 
 psram:
   mode: octal
@@ -75,9 +85,10 @@ substitutions:
   state_starting: '0'
   state_idle: '1'
   state_wakeword: '2'
-  state_listening: '3'
-  state_thinking: '4'
-  state_replying: '5'
+  state_vastart: '3'
+  state_listening: '4'
+  state_thinking: '5'
+  state_replying: '6'
   state_error: '11'
   state_muted: '12'
 
@@ -90,8 +101,8 @@ globals:
 text_sensor:
   - platform: template
     name: "Current state"
-    update_interval: 1s
-    lambda: |-
+    update_interval: 100ms
+    lambda: !lambda |-
         switch(id(sys_phase)) {
           default:
             return {"Unknown"};
@@ -104,6 +115,9 @@ text_sensor:
             break;
           case ${state_wakeword}:
             return {"WakeWord"};
+            break;
+          case ${state_vastart}:
+            return {"VA Start"};
             break;
           case ${state_listening}:
             return {"Listening"};
@@ -124,29 +138,19 @@ text_sensor:
 
 ############################ Buttons / Switches
 
-binary_sensor:
-  - platform: gpio
-    pin:
-      number: 13
-      inverted: true
-      mode:
-        input: true
-        pullup: true
-    name: Toggle Wake Word
-    id: button
-    on_press:
-      - switch.toggle: use_wake_word
-
 switch:
   - platform: template
-    name: Use Wake Word
-    id: use_wake_word
+    name: Mute
+    id: enable_mute
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
+    restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
-      - script.execute: turn_on_wake_word
-    on_turn_off:
       - script.execute: turn_off_wake_word
+    on_turn_off:
+      - script.execute: turn_on_wake_word
+  - platform: restart
+    id: trigger_restart
+    name: "Restart"
 
 ############################ Lights
 
@@ -176,7 +180,7 @@ light:
           min_brightness: 0%
           max_brightness: 50%
   - platform: spi_led_strip
-    num_leds: 32
+    num_leds: 9
     id: led_strip
     name: "RGB LED Strip"
     data_rate: 200kHz
@@ -184,7 +188,7 @@ light:
       - addressable_color_wipe:
           name: "Rotating Red"
           colors:
-            - red: 20%
+            - red: 100%
               green: 0%
               blue: 0%
               num_leds: 1
@@ -193,33 +197,6 @@ light:
               blue: 0%
               num_leds: 7
           add_led_interval: 75ms
-          reverse: false
-      - addressable_color_wipe:
-          name: "Rotating Green"
-          colors:
-            - red: 0%
-              green: 0%
-              blue: 0%
-              num_leds: 1
-            - red: 0%
-              green: 100%
-              blue: 0%
-              num_leds: 2
-              gradient: true
-            - red: 0%
-              green: 100%
-              blue: 0%
-              num_leds: 1
-            - red: 0%
-              green: 100%
-              blue: 0%
-              num_leds: 2
-              gradient: true
-            - red: 0%
-              green: 0%
-              blue: 0%
-              num_leds: 10
-          add_led_interval: 50ms
           reverse: false
       - pulse:
           name: "Fast Pulse"
@@ -252,23 +229,25 @@ i2s_audio:
 
 adf_pipeline:
   - platform: i2s_audio
-    type: sink
+    type: audio_out
     id: adf_i2s_out
     i2s_audio_id: i2s_out
     i2s_dout_pin: GPIO10    # MAX98357 DIN
-
   - platform: i2s_audio
-    type: source
+    type: audio_in
     id: adf_i2s_in
     i2s_audio_id: i2s_in
     i2s_din_pin: GPIO19     # INMP441 DO
     channel: left
     sample_rate: 16000
     bits_per_sample: 16bit
+    pdm: false
 
 microphone:
   - platform: adf_pipeline
     id: adf_microphone
+    gain_log2: 3
+    keep_pipeline_alive: true
     pipeline:
       - adf_i2s_in
       - self
@@ -277,6 +256,7 @@ media_player:
   - platform: adf_pipeline
     id: adf_media_player
     name: s3_media_player
+    keep_pipeline_alive: true
     internal: false
     pipeline:
       - self
@@ -289,13 +269,16 @@ micro_wake_word:
   model: hey_jarvis
   on_wake_word_detected:
     then:
+      # TEST...
+      - micro_wake_word.stop:
+      # ... TEST
       - lambda: id(sys_phase) = ${state_wakeword};
       - script.execute: control_ui
       - media_player.play_media:
           media_url: 'http://192.168.178.80/turret.mp3'
       - wait_until:
           media_player.is_idle:
-      - voice_assistant.start
+      - voice_assistant.start:
 
 voice_assistant:
   id: voice_assist
@@ -309,7 +292,12 @@ voice_assistant:
     - lambda: id(sys_phase) = ${state_error};
     - script.execute: control_ui
   on_client_connected:
+    - script.execute: turn_on_wake_word
     - lambda: id(sys_phase) = ${state_idle};
+    - script.execute: control_ui
+  on_client_disconnected:
+    - script.execute: turn_off_wake_word
+    - lambda: id(sys_phase) = ${state_error};
     - script.execute: control_ui
   on_listening:
     - lambda: id(sys_phase) = ${state_listening};
@@ -317,25 +305,21 @@ voice_assistant:
   on_tts_start:
     - lambda: id(sys_phase) = ${state_replying};
     - script.execute: control_ui
+  on_start:
+    - lambda: id(sys_phase) = ${state_vastart};
+    - script.execute: control_ui
   on_end:
     - wait_until:
-        not:
-          media_player.is_playing:
+          media_player.is_idle:
     - delay: 250ms
-    - if:
-        condition:
-          - switch.is_on: use_wake_word
-        then:
-          - script.execute: turn_on_wake_word
-        else:
-          - script.execute: turn_off_wake_word
+    - script.execute: turn_on_wake_word
 
 ############################ Scripts
 
 script:
   - id: control_ui
     then:
-      - lambda: |
+      lambda: !lambda |-
           switch(id(sys_phase)) {
             default:
             case ${state_starting}:
@@ -345,15 +329,19 @@ script:
               id(led_strip).turn_off().perform();
               break;
             case ${state_wakeword}:
-              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(0.2).perform();
+              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(1.0).set_effect("none").perform();
+              break;
+            case ${state_vastart}:
+              id(led_strip).turn_on().set_rgb(1, 0.5, 0).set_brightness(1.0).set_effect("none").perform();
               break;
             case ${state_listening}:
-              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(1.0).perform();
+              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(1.0).set_effect("Fast Pulse").perform();
               break;
             case ${state_thinking}:
+              id(led_strip).turn_on().set_rgb(1, 0.5, 0).set_brightness(1.0).set_effect("Fast Pulse").perform();
               break;
             case ${state_replying}:
-              id(led_strip).turn_on().set_rgb(0, 0, 1).set_brightness(0.2).perform();
+              id(led_strip).turn_on().set_rgb(0, 0, 1).set_brightness(1.0).set_effect("none").perform();
               break;
             case ${state_error}:
               id(led_strip).turn_on().set_rgb(1, 0, 0).set_brightness(0.2).set_effect("Fast Pulse").perform();
@@ -362,19 +350,22 @@ script:
               id(led_strip).turn_on().set_rgb(1, 0, 0).set_brightness(0.2).set_effect("Slow Pulse").perform();
               break;
           }
+
   - id: turn_on_wake_word
     then:
-      - micro_wake_word.start
+      - voice_assistant.stop:
       - if:
           condition:
             media_player.is_playing:
           then:
             - media_player.stop:
+      - micro_wake_word.start:
       - lambda: id(sys_phase) = ${state_idle};
       - script.execute: control_ui
 
   - id: turn_off_wake_word
     then:
-      - micro_wake_word.stop
+      - micro_wake_word.stop:
+      - voice_assistant.stop:
       - lambda: id(sys_phase) = ${state_muted};
       - script.execute: control_ui
