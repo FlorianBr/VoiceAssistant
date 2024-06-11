@@ -8,9 +8,9 @@ The case is based on a 3D printed Companion Cube made by woodyhead101 available 
 
 ![3D Parts](3dprinting.jpg)
 
-Most of the parts are not modified, there is only one exception: For the microphone I modified one of the Aperture-Inlays. I did that in the slicer it self, so there is no 3D File for that.
+Most of the outter parts are not modified, there is only one exception: For the microphone I modified one of the Aperture-Inlays. I did that in the slicer it self, so there is no 3D File for that.
 
-Besides that I added holders for the ESP32 and the amplifiers. The speaker is screwed to the backwards facing plate and the other components hold by 3D printed parts stacked onto the speaker.
+Besides that I added holders for the ESP32, LED strip and the amplifiers. The speaker is screwed to the backwards facing plate and the other components hold by 3D printed parts stacked onto the speaker. The parts are far from perfect, but it works. But next time I would design it differently...
 
 ![Electronic holders](holders.jpg)
 ![Microphone](mic.jpg)
@@ -20,7 +20,7 @@ Besides that I added holders for the ESP32 and the amplifiers. The speaker is sc
 
 The ESP32 is a chinese clone of Espressifs ESP32-S3-DevKitC with slightly different pinning. The on-board RGB-LED is at IO48 instead of IO38 for example.
 
-On the breadboard I still have an additional LED and a Mute-button, both removed in the final design.
+On the breadboard I still have an additional LED and a button, both removed in the final design. Also the led strip is longer.
 
 ![Breadboard](breadboard.jpg)
 
@@ -61,18 +61,18 @@ On the breadboard I still have an additional LED and a Mute-button, both removed
 - GPIO19 - INMP441 SO
 - GPIO20 - INMP441 WS
 - GPIO21 - INMP441 SCK
-- GPIO46 - MAX98357 DIN
+- GPIO46 - MAX98357 LRC
 - GPIO48 - On-Board RGB-LED
 
 ## The software
 
-A ESPHome Voice Assistant with LED-Strip, Speaker, custom wake word...
-
-### Wake word
+### Local Wake word
 
 The ESP is powerful enough for micro_wake_word, meaning: The detection of the wake word runs directly on the ESP32. Instead of the official models I use a model found in [Florian Wartner Collection](https://github.com/fwartner/home-assistant-wakewords-collection), and added the necessary JSON to use it.
 
 For your own training have a look at the Docs [here](https://github.com/kahrendt/microWakeWord) and [here](https://github.com/dscripka/openWakeWord)
+
+⚠️ :warning: Work in progress! Not yet working!
 
 ### States, Conditions and Light
 
@@ -83,11 +83,12 @@ States:
 | starting  | Power-On                    | Red, rotating      |
 | idle      | VA is ready, waiting for WW | Off                |
 | wakeword  | WW detected                 | Green              |
+| VA start  | VA is starting              | Orange             |
 | listening | VA is listening             | Green, fast pulse  |
 | thinking  | Parsing audio data          | Orange, fast pulse |
 | replying  | VA is answering             | Blue               |
-| error     | Generic/unknown error       | Red, Fast Pulse |
-| muted     | WakeWord detection OFF      | Red, Slow Pulse |
+| error     | Generic/unknown error       | Red, Fast Pulse    |
+| muted     | WakeWord detection OFF      | Red, Slow Pulse    |
 
 TODO:
 
