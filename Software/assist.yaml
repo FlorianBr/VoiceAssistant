@@ -289,11 +289,11 @@ voice_assistant:
   id: voice_assist
   microphone: microphone_id
   media_player: media_player_id
-  noise_suppression_level: 4
-  # noise_suppression_level: 2
-  auto_gain: 31dBFS
-  volume_multiplier: 32.0
-  # volume_multiplier: 32.0
+  # All settings currently broken: https://github.com/esphome/issues/issues/6599
+  # noise_suppression_level: 2    # TODO: Tune
+  # auto_gain: 31dBFS             # TODO: Tune
+  # volume_multiplier: 32.0       # TODO: Tune
+  volume_multiplier: 128
   use_wake_word: false
   conversation_timeout: 60s
 
