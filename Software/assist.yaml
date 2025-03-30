@@ -3,33 +3,20 @@
 # Microphone: INMP441
 # Speaker: MAX98357
 # Outputs: LED Strip
-
-external_components:
-  - source:
-      type: git
-      url: https://github.com/gnumpi/esphome_audio
-      # ref: main
-      ref: dev-next
-    components: [ adf_pipeline, i2s_audio ]
-    refresh: 0s
+# Portal WAVs: https://theportalwiki.com/wiki/Turret_voice_lines
 
 esphome:
-  name: assist_cube
+  name: assistcube
   comment: Voice Assist Cube on ESP32-S3
   friendly_name: VA Cube
   name_add_mac_suffix: false
-  min_version: 2024.2.0
-  platformio_options:
-    board_build.flash_mode: dio
-    board_upload.maximum_size: 16777216
-    build_flags: "-DBOARD_HAS_PSRAM"
-    board_build.arduino.memory_type: qio_opi
+  min_version: 2025.2.0
   on_boot:
     priority: -100
     then:
       - lambda: id(sys_phase) = ${state_starting};
       - script.execute: control_ui
-      - media_player.volume_set: 40%
+      - media_player.volume_set: 60%
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -37,7 +24,7 @@ esp32:
   flash_size: 16MB
   framework:
     type: esp-idf
-    version: recommended
+    version: latest
     sdkconfig_options:
       CONFIG_ESP32_S3_BOX_BOARD: "y"
       CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
@@ -64,11 +51,12 @@ api:
         - voice_assistant.stop
 
 ota:
+  - platform: esphome
 
 wifi:
-  ssid: !secret ssid
-  password: !secret pass
-  power_save_mode: none
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+  # power_save_mode: none
   enable_on_boot: True
   fast_connect: True
   output_power: 8.5
@@ -78,8 +66,7 @@ web_server:
   include_internal: true
 
 logger:
-  hardware_uart : UART0
-  level: INFO
+  hardware_uart: USB_SERIAL_JTAG
 
 substitutions:
   state_starting: '0'
@@ -101,7 +88,7 @@ globals:
 text_sensor:
   - platform: template
     name: "Current state"
-    update_interval: 100ms
+    update_interval: 500ms
     lambda: !lambda |-
         switch(id(sys_phase)) {
           default:
@@ -163,7 +150,6 @@ light:
     rgb_order: GRB
     pin: GPIO48
     num_leds: 1
-    rmt_channel: 0
     chipset: SK6812
     name: "On Board LED"
     effects:
@@ -227,78 +213,103 @@ i2s_audio:
     i2s_lrclk_pin: GPIO46   # MAX98357 LRC
     i2s_bclk_pin: GPIO9     # MAX98357 BCK
 
-adf_pipeline:
+microphone:
   - platform: i2s_audio
-    type: audio_out
-    id: adf_i2s_out
-    i2s_audio_id: i2s_out
-    i2s_dout_pin: GPIO10    # MAX98357 DIN
-  - platform: i2s_audio
-    type: audio_in
-    id: adf_i2s_in
-    i2s_audio_id: i2s_in
+    id: microphone_id
+    adc_type: external
     i2s_din_pin: GPIO19     # INMP441 DO
     channel: left
     sample_rate: 16000
     bits_per_sample: 16bit
     pdm: false
+    i2s_audio_id: i2s_in
 
-microphone:
-  - platform: adf_pipeline
-    id: adf_microphone
-    gain_log2: 3
-    keep_pipeline_alive: true
-    pipeline:
-      - adf_i2s_in
-      - self
+speaker:
+  - platform: i2s_audio
+    id: speaker_id
+    i2s_audio_id: i2s_out
+    dac_type: external
+    i2s_dout_pin: GPIO10    # MAX98357 DIN
+    sample_rate: 48000
+    bits_per_sample: 16bit
+    channel: left
+    buffer_duration: 100ms
+
+  - platform: mixer
+    id: mixer_id
+    output_speaker: speaker_id
+    source_speakers:
+      - id: announce_mixer_in
+      - id: media_mixer_in
+  - platform: resampler
+    id: media_resampling_in
+    output_speaker: media_mixer_in
+  - platform: resampler
+    id: announce_resampling_in
+    output_speaker: announce_mixer_in
 
 media_player:
-  - platform: adf_pipeline
-    id: adf_media_player
-    name: s3_media_player
-    keep_pipeline_alive: true
-    internal: false
-    pipeline:
-      - self
-      - adf_i2s_out
+  - platform: speaker
+    name: "Media Player"
+    id: media_player_id
+    announcement_pipeline:
+      speaker: announce_resampling_in
+      num_channels: 1
+    media_pipeline:
+      speaker: media_resampling_in
+      num_channels: 1
+    files:
+      - id: sound_hello
+        file: https://i1.theportalwiki.net/img/2/2d/Turret_sp_sabotage_factory_good_pass01.wav
+      - id: sound_goodbye
+        file: https://i1.theportalwiki.net/img/e/e9/Turret_turret_retire_1.wav
+      - id: sound_failure
+        file: https://i1.theportalwiki.net/img/e/ec/Turret_turretlightbridgeblock04.wav
+      - id: sound_alarm
+        file: https://i1.theportalwiki.net/img/d/d3/Turret_alarm.wav
 
 ############################ Voice Assistant
 
 micro_wake_word:
-  # model: github://FlorianBr/VoiceAssistant/wakeword/glados.json@main
-  model: hey_jarvis
+  vad:
+  models:
+    model: hey_jarvis
   on_wake_word_detected:
     then:
-      # TEST...
-      - micro_wake_word.stop:
-      # ... TEST
       - lambda: id(sys_phase) = ${state_wakeword};
       - script.execute: control_ui
-      - media_player.play_media:
-          media_url: 'http://192.168.178.80/turret.mp3'
+      - media_player.speaker.play_on_device_media_file:
+          media_file: sound_alarm
+          announcement: true
       - wait_until:
           media_player.is_idle:
       - voice_assistant.start:
 
 voice_assistant:
   id: voice_assist
-  microphone: adf_microphone
-  media_player: adf_media_player
+  microphone: microphone_id
+  media_player: media_player_id
   noise_suppression_level: 4
+  # noise_suppression_level: 2
   auto_gain: 31dBFS
   volume_multiplier: 32.0
+  # volume_multiplier: 32.0
   use_wake_word: false
+  conversation_timeout: 60s
+
   on_error:
     - lambda: id(sys_phase) = ${state_error};
-    - script.execute: control_ui
   on_client_connected:
+    - media_player.speaker.play_on_device_media_file:
+        media_file: sound_hello
+        announcement: true
     - script.execute: turn_on_wake_word
-    - lambda: id(sys_phase) = ${state_idle};
-    - script.execute: control_ui
   on_client_disconnected:
+    - media_player.speaker.play_on_device_media_file:
+        media_file: sound_goodbye
+        announcement: true
     - script.execute: turn_off_wake_word
     - lambda: id(sys_phase) = ${state_error};
-    - script.execute: control_ui
   on_listening:
     - lambda: id(sys_phase) = ${state_listening};
     - script.execute: control_ui
@@ -313,6 +324,18 @@ voice_assistant:
           media_player.is_idle:
     - delay: 250ms
     - script.execute: turn_on_wake_word
+  # on_intent_start:
+  # on_intent_stop:
+  # on_listening:
+  # on_wake_word_detected:
+  # on_stt_end:
+  # on_stt_vad_start:
+  # on_stt_vad_end:
+  # on_tts_end:
+  # on_tts_stream_start:
+  # on_tts_stream_end:
+  # on_idle:
+
 
 ############################ Scripts
 
@@ -369,3 +392,12 @@ script:
       - voice_assistant.stop:
       - lambda: id(sys_phase) = ${state_muted};
       - script.execute: control_ui
+
+############################ Scripts
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
+
+bluetooth_proxy:
+  active: true

@@ -8,7 +8,7 @@ The case is based on a 3D printed Companion Cube made by woodyhead101 available 
 
 ![3D Parts](3dprinting.jpg)
 
-Most of the outter parts are not modified, there is only one exception: For the microphone I modified one of the Aperture-Inlays. I did that in the slicer it self, so there is no 3D File for that.
+Most of the outer parts are not modified, there is only one exception: For the microphone I modified one of the Aperture-Inlays. I did that in the slicer it self, so there is no 3D File for that.
 
 Besides that I added holders for the ESP32, LED strip and the amplifiers. The speaker is screwed to the backwards facing plate and the other components hold by 3D printed parts stacked onto the speaker. The parts are far from perfect, but it works. But next time I would design it differently...
 
@@ -92,6 +92,8 @@ States:
 
 TODO:
 
-- Put the confirmation MP3 in the ESPs flash
-- Use the Onboard-LED for something useful
-- Custom wake-word currently not working :(
+- [X] Put the confirmation MP3 in the ESPs flash
+- [ ] Custom wake-word
+- [ ] Better state changes and doc of states
+- [ ] Improve mic performance
+- [ ] Use the Onboard-LED for something useful
