@@ -1,5 +1,9 @@
 # Voice Assistant for HA
 
+> [!WARNING]
+> Due to a bug in ESPHome the Voice Assistant wont work in combination with local wake word detection. The mic gain is broken for the VA, so it will listen to the wake word but the audio stream is not loud enough.
+> So I decided to stop using a I2S-Mic with ESP32 and move on to the much better ReSpeaker Lite module. I'll update everything here as soon as possible.
+
 After playing around with different hardwares and the settings (see [here](https://github.com/FlorianBr/ESPHome.Assist)) I started to create a (more or less) final voice assistant including case and so on
 
 ## The case
